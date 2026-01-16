@@ -24,6 +24,12 @@ pipeline{
         always{
             cleanWs()
         }
+        success{
+            echo "pass"
+        }
+        failure{
+            echo "fail"
+        }
     }
 
 }
