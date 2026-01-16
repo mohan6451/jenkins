@@ -7,6 +7,9 @@ pipeline{
     environment {
         learning = 'Jenkins'
     }
+    options {
+        timeout(time: 5, unit: 'SECONDS') 
+    }
     //build
     stages{
         stage('build'){
@@ -19,6 +22,7 @@ pipeline{
                     echo "building jenkins file 14/1/26"
                     echo $learning
                     echo $need
+                    SLEEP 10
                     env
                     """
                 } 
