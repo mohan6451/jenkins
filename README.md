@@ -41,5 +41,7 @@ automating pipeline using trigger:
 1. timer
 2. webhook (jenkin github webhook) | blazemeter website
 3. poll SCM | jenkin check in github peridically for any changes and run the pipeline | depends on commit id
-
-input: 
+-----------------------------------------
+plugins:
+1. pipeline stage view plugin
+2. pipeline utility steps
