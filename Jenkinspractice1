@@ -1,11 +1,22 @@
 pipeline{
+    //pre-build
     agent(node-1){
         label 'node1'
     }
+    environment {
+        learning = 'Jenkins'
+    }
+    //build
     stages{
         stage('build'){
             steps{
-                echo "building jenkins file 14/1/26"
+                script{
+                    sh """
+                    echo "building jenkins file 14/1/26"
+                    echo $learning
+                    env
+                    """
+                } 
             }
         }
         stage('test'){
@@ -19,6 +30,7 @@ pipeline{
             }
         }
     }
+    //post build
     post{
         always{
             cleanWs()
