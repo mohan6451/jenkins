@@ -19,8 +19,9 @@ pipeline{
                     sh """
                     echo "building jenkins file 14/1/26"
                     echo $learning
-                    echo $need
+                    $need
                     env
+                    
                     """
                 } 
             }
@@ -28,6 +29,7 @@ pipeline{
         stage('test'){
             steps{
                 echo "testing"
+                echo $need
             }
         }
         stage('deploy'){
