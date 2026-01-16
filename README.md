@@ -33,3 +33,11 @@ Master Agent Architecture
 Create credentials to connect agent
 Install Java in agent
 Select Non verification strategy
+------------------------------------------------
+
+automating pipeline using trigger:
+1. timer
+2. webhook (jenkin github webhook) | blazemeter website
+3. poll SCM | jenkin check in github peridically for any changes and run the pipeline | depends on commit id
+
+input: 
