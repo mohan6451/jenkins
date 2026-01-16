@@ -50,6 +50,9 @@ pipeline{
         failure{
             echo "fail"
         }
+        aborted{
+            echo "pipeline is aborted"
+        }
     }
 
 }
