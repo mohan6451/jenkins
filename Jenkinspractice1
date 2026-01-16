@@ -8,7 +8,7 @@ pipeline{
         learning = 'Jenkins'
     }
     options {
-        timeout(time: 5, unit: 'SECONDS') 
+        timeout(time: 10, unit: 'SECONDS') 
     }
     parameters{
         string(name: 'PERSON', defaultValue: 'Mr Jenkins', description: 'Who should I say hello to?')
@@ -29,7 +29,7 @@ pipeline{
                     echo "building jenkins file 14/1/26"
                     echo $learning
                     echo $need
-                    SLEEP 10
+                    SLEEP 2
                     env
                     """
                 } 
