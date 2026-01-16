@@ -1,36 +1,68 @@
 SHELL=/bin/bash
-SUDO_GID=1001
-HOSTNAME=ip-172-31-24-150.ec2.internal
+RUN_TESTS_DISPLAY_URL=http://54.145.14.253:8080/job/practice/10/display/redirect?page=tests
 HISTSIZE=10000
-HISTTIMEFORMAT=%d/%m/%y %T
+JENKINS_SERVER_COOKIE=durable-a197714c7d62165a771ac384adf686c5def798dd0dfd93b78bd9322c5921e8ee
+GIT_PREVIOUS_SUCCESSFUL_COMMIT=fadaa129d08388c0641e17efb9bbd0f248ed9cdd
+HISTTIMEFORMAT=%d/%m/%y %T 
 AWS_DEFAULT_REGION=us-east-1
-SUDO_COMMAND=/bin/su
-SUDO_USER=ec2-user
-PWD=/home/ec2-user
-LOGNAME=root
+RUN_CHANGES_DISPLAY_URL=http://54.145.14.253:8080/job/practice/10/display/redirect?page=changes
+HUDSON_HOME=/var/lib/jenkins
+PWD=/home/ec2-user/jenkins/workspace/practice
+LOGNAME=ec2-user
+XDG_SESSION_TYPE=tty
+BUILD_URL=http://54.145.14.253:8080/job/practice/10/
 ANSIBLE_DEPRECATION_WARNINGS=False
-HOME=/root
+JOB_URL=http://54.145.14.253:8080/job/practice/
+BUILD_NUMBER=10
+MOTD_SHOWN=pam
+JENKINS_NODE_COOKIE=009c7c18-beae-420a-badf-27c1bf2d7520
+BUILD_DISPLAY_NAME=#10
+HOME=/home/ec2-user
 LANG=C.UTF-8
-LS_COLORS=rs=0:di=01;34:ln=01;36:mh=00:pi=40;33:so=01;35:do=01;35:bd=40;33;01:cd=40;33;01:or=40;31;01:mi=01;37;41:su=37;41:sg=30;43:ca=30;41:tw=30;42:ow=34;42:st=37;44:ex=01;32:*.tar=01;31:*.tgz=01;31:*.arc=01;31:*.arj=01;31:*.taz=01;31:*.lha=01;31:*.lz4=01;31:*.lzh=01;31:*.lzma=01;31:*.tlz=01;31:*.txz=01;31:*.tzo=01;31:*.t7z=01;31:*.zip=01;31:*.z=01;31:*.dz=01;31:*.gz=01;31:*.lrz=01;31:*.lz=01;31:*.lzo=01;31:*.xz=01;31:*.zst=01;31:*.tzst=01;31:*.bz2=01;31:*.bz=01;31:*.tbz=01;31:*.tbz2=01;31:*.tz=01;31:*.deb=01;31:*.rpm=01;31:*.jar=01;31:*.war=01;31:*.ear=01;31:*.sar=01;31:*.rar=01;31:*.alz=01;31:*.ace=01;31:*.zoo=01;31:*.cpio=01;31:*.7z=01;31:*.rz=01;31:*.cab=01;31:*.wim=01;31:*.swm=01;31:*.dwm=01;31:*.esd=01;31:*.jpg=01;35:*.jpeg=01;35:*.mjpg=01;35:*.mjpeg=01;35:*.gif=01;35:*.bmp=01;35:*.pbm=01;35:*.pgm=01;35:*.ppm=01;35:*.tga=01;35:*.xbm=01;35:*.xpm=01;35:*.tif=01;35:*.tiff=01;35:*.png=01;35:*.svg=01;35:*.svgz=01;35:*.mng=01;35:*.pcx=01;35:*.mov=01;35:*.mpg=01;35:*.mpeg=01;35:*.m2v=01;35:*.mkv=01;35:*.webm=01;35:*.webp=01;35:*.ogm=01;35:*.mp4=01;35:*.m4v=01;35:*.mp4v=01;35:*.vob=01;35:*.qt=01;35:*.nuv=01;35:*.wmv=01;35:*.asf=01;35:*.rm=01;35:*.rmvb=01;35:*.flc=01;35:*.avi=01;35:*.fli=01;35:*.flv=01;35:*.gl=01;35:*.dl=01;35:*.xcf=01;35:*.xwd=01;35:*.yuv=01;35:*.cgm=01;35:*.emf=01;35:*.ogv=01;35:*.ogx=01;35:*.aac=01;36:*.au=01;36:*.flac=01;36:*.m4a=01;36:*.mid=01;36:*.midi=01;36:*.mka=01;36:*.mp3=01;36:*.mpc=01;36:*.ogg=01;36:*.ra=01;36:*.wav=01;36:*.oga=01;36:*.opus=01;36:*.spx=01;36:*.xspf=01;36:
-AWS_PAGER=
 ANSIBLE_FORCE_COLOR=1
+JENKINS_URL=http://54.145.14.253:8080/
+JOB_BASE_NAME=practice
 PROMPT_COMMAND=$(history -w)
-TERM=xterm
+JOB_NAME=practice
+learning=Jenkins
+RUN_DISPLAY_URL=http://54.145.14.253:8080/job/practice/10/display/redirect
+SSH_CONNECTION=172.31.24.150 38568 172.31.27.181 22
+JOB_DISPLAY_URL=http://54.145.14.253:8080/job/practice/display/redirect
+WORKSPACE=/home/ec2-user/jenkins/workspace/practice
+GIT_PREVIOUS_COMMIT=fadaa129d08388c0641e17efb9bbd0f248ed9cdd
+HUDSON_URL=http://54.145.14.253:8080/
+XDG_SESSION_CLASS=user
+NODE_NAME=node-1
 LESSOPEN=||/usr/bin/lesspipe.sh %s
-USER=root
-SHLVL=1
+USER=ec2-user
+HUDSON_SERVER_COOKIE=1eff00a02d8efeba
+GIT_URL=https://github.com/mohan6451/jenkins.git
+SHLVL=2
+BUILD_TAG=jenkins-practice-10
+EXECUTOR_NUMBER=1
+HUDSON_COOKIE=11d1ba46-266b-4682-b5a8-ef2a67849691
 SYSTEMD_PAGER=cat
-PS1=
-\e[1;32m54.145.14.253 | 172.31.24.150 | t3.micro | $(git config --get remote.origin.url || echo null)
-[ \[\e[1;31m\]\u\[\e[m\]@\[\e[1;33m\]\h\[\e[m\] \[\e[1;36m\]\w\[\e[m\] ]\$
+XDG_SESSION_ID=5
+JENKINS_HOME=/var/lib/jenkins
+XDG_RUNTIME_DIR=/run/user/1001
+SSH_CLIENT=172.31.24.150 38568 22
 REQUESTS_CA_BUNDLE=/etc/pki/tls/certs/ca-bundle.crt
 DEBUGINFOD_IMA_CERT_PATH=/etc/keys/ima:
+GIT_COMMIT=bbf1e947c03587dbf7c253fb21c8845124607fdd
 which_declare=declare -f
+NODE_LABELS=node-1 node1
+STAGE_NAME=build
 AWS_CA_BUNDLE=/etc/pki/tls/certs/ca-bundle.crt
-PATH=/root/.local/bin:/root/bin:/sbin:/bin:/usr/sbin:/usr/bin
-SUDO_UID=1001
-MAIL=/var/spool/mail/ec2-user
+WORKSPACE_TMP=/home/ec2-user/jenkins/workspace/practice@tmp
+XDG_DATA_DIRS=/home/ec2-user/.local/share/flatpak/exports/share:/var/lib/flatpak/exports/share:/usr/local/share:/usr/share
+PATH=/home/ec2-user/.local/bin:/home/ec2-user/bin:/usr/local/bin:/usr/bin:/usr/local/sbin:/usr/sbin
+RUN_ARTIFACTS_DISPLAY_URL=http://54.145.14.253:8080/job/practice/10/display/redirect?page=artifacts
+CI=true
+DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1001/bus
+GIT_BRANCH=origin/main
+BUILD_ID=10
+OLDPWD=/home/ec2-user
 BASH_FUNC_which%%=() {  ( alias;
  eval ${which_declare} ) | /usr/bin/which --tty-only --read-alias --read-functions --show-tilde --show-dot $@
 }
-_=/bin/env
+_=/usr/bin/env

@@ -3,17 +3,22 @@ pipeline{
     agent(node-1){
         label 'node1'
     }
+    // if added env inside the stage then only that particular stage its accesable
     environment {
         learning = 'Jenkins'
     }
     //build
     stages{
+        environment {
+        needed = 'ansible'
+    }
         stage('build'){
             steps{
                 script{
                     sh """
                     echo "building jenkins file 14/1/26"
                     echo $learning
+                    echo $ansible
                     env
                     """
                 } 
