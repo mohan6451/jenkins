@@ -10,15 +10,15 @@ pipeline{
     //build
     stages{
         environment {
-        needed = 'ansible'
-    }
+            need= 'ansible'
+        }
         stage('build'){
             steps{
                 script{
                     sh """
                     echo "building jenkins file 14/1/26"
                     echo $learning
-                    echo $ansible
+                    echo $need
                     env
                     """
                 } 
