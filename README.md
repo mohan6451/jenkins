@@ -34,7 +34,9 @@ Create credentials to connect agent
 Install Java in agent
 Select Non verification strategy
 ------------------------------------------------
-
+sleep <time>
+environment variable | env
+-------------------------------------------
 automating pipeline using trigger:
 1. timer
 2. webhook (jenkin github webhook) | blazemeter website

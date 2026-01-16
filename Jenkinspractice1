@@ -29,7 +29,6 @@ pipeline{
                     echo "building jenkins file 14/1/26"
                     echo $learning
                     echo $need
-                    sleep 5
                     """
                 } 
             }
