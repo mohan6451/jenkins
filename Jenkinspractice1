@@ -9,7 +9,6 @@ pipeline{
     }
     //build
     stages{
-        
         stage('build'){
             environment {
                 need= 'ansible'
@@ -21,7 +20,6 @@ pipeline{
                     echo $learning
                     $need
                     env
-                    
                     """
                 } 
             }
