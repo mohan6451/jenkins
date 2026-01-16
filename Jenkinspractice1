@@ -29,7 +29,6 @@ pipeline{
         stage('test'){
             steps{
                 echo "testing"
-                echo $need
             }
         }
         stage('deploy'){
