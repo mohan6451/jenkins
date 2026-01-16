@@ -9,10 +9,11 @@ pipeline{
     }
     //build
     stages{
-        environment {
-            need= 'ansible'
-        }
+        
         stage('build'){
+            environment {
+                need= 'ansible'
+            }
             steps{
                 script{
                     sh """
