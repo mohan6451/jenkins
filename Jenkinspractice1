@@ -9,12 +9,12 @@ pipeline{
                 echo "building jenkins file 14/1/26"
             }
         }
-    stage('test'){
+        stage('test'){
             steps{
                 echo "testing"
             }
         }
-    stage('deploy'){
+        stage('deploy'){
             steps{
                 echo "deploying"
             }
