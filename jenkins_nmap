@@ -1,0 +1,58 @@
+pipeline {
+  agent any
+
+  parameters {
+    string(name: 'NETWORK', defaultValue: '10.249.93.0/24', description: 'CIDR to scan')
+  }
+
+  environment {
+    NETWORK = "${params.NETWORK ?: '10.249.93.0/24'}"
+    ALIVE_HOSTS = "alive-hosts.txt"
+    NMAP_REPORT = "nmap-alive-scan.txt"
+    NMAP_BIN = "/usr/bin/nmap"  // Kali wrapper that calls /usr/lib/nmap/nmap
+  }
+
+  stages {
+    stage('Find Alive Hosts') {
+      steps {
+        sh '''
+          set -e
+          echo "[+] Discovering alive hosts in ${NETWORK}"
+          # NOPASSWD allows non-interactive sudo (-n)
+          sudo -n ${NMAP_BIN} -sn ${NETWORK} -oG sweep.gnmap
+
+          # Extract alive hosts
+          grep "Up$" sweep.gnmap | awk '{print $2}' | sort -u > ${ALIVE_HOSTS} || true
+
+          if [ -s ${ALIVE_HOSTS} ]; then
+            echo "[+] Alive hosts found:"
+            cat ${ALIVE_HOSTS}
+          else
+            echo "[!] No alive hosts detected in ${NETWORK}"
+          fi
+        '''
+      }
+    }
+
+    stage('Scan Alive Hosts with Nmap') {
+      steps {
+        sh '''
+          set -e
+          if [ ! -s ${ALIVE_HOSTS} ]; then
+            echo "[!] No alive hosts found. Skipping scan."
+            exit 0
+          fi
+
+          echo "[+] Running detailed Nmap scan on alive hosts"
+          sudo -n ${NMAP_BIN} -sS -sV -sC -iL ${ALIVE_HOSTS} -oN ${NMAP_REPORT}
+        '''
+      }
+    }
+  }
+
+  post {
+    always {
+      archiveArtifacts artifacts: '*.txt,*.gnmap', allowEmptyArchive: true
+    }
+  }
+}

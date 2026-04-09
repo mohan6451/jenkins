@@ -1,0 +1,349 @@
+pipeline {
+  agent any
+
+  parameters {
+    choice(
+      name: 'ENVIRONMENT',
+      choices: ['external', 'internal'],
+      description: 'Scan environment'
+    )
+    string(
+      name: 'NMAP_JOB',
+      defaultValue: 'Riskhunt-nmap',
+      description: 'Nmap job exporting alive-hosts.txt'
+    )
+    string(
+      name: 'ALIVE_FILE',
+      defaultValue: 'alive-hosts.txt',
+      description: 'Alive host artifact'
+    )
+    string(
+      name: 'GMP_SOCKET',
+      defaultValue: '/run/gvmd/gvmd.sock',
+      description: 'gvmd Unix socket path - UPDATE THIS PATH'
+    )
+    string(
+      name: 'TARGET_RETENTION_DAYS',
+      defaultValue: '90',
+      description: 'Delete Jenkins targets older than N days'
+    )
+  }
+
+  environment {
+    REPORT_DIR = 'openvas-reports'
+    GMP_SOCKET = "${params.GMP_SOCKET}"
+    ENVIRONMENT = "${params.ENVIRONMENT}"
+    TARGET_RETENTION_DAYS = "${params.TARGET_RETENTION_DAYS}"
+    PORTLIST_EXTERNAL = "4a4717fe-57d2-11e1-9a26-406186ea4fc5"
+    PORTLIST_INTERNAL = "33d0cd82-57c6-11e1-8ed1-406186ea4fc5"
+    SCANNER_ID = "6acd0832-df90-11e4-b9d5-28d24461215b"
+  }
+
+  options {
+    skipDefaultCheckout true
+    timestamps()
+    timeout(time: 4, unit: 'HOURS')
+    buildDiscarder(logRotator(numToKeepStr: '10'))
+  }
+
+  stages {
+    stage('Validate GVM Socket') {
+      steps {
+        sh '''
+set -e
+echo "[+] Checking GVM socket..."
+if [ ! -S "$GMP_SOCKET" ]; then
+  echo "❌ Socket missing: $GMP_SOCKET"
+  echo "Find sockets:"
+  find /run /var/run /opt -name "*gvmd*.sock" 2>/dev/null || true
+  exit 1
+fi
+echo "✅ Socket OK: $GMP_SOCKET"
+        '''
+      }
+    }
+
+    stage('Test GMP Connection') {
+      steps {
+        withCredentials([usernamePassword(
+          credentialsId: 'gvm_admin',
+          usernameVariable: 'GMP_USER',
+          passwordVariable: 'GMP_PASS'
+        )]) {
+          sh '''
+set -e
+echo "[+] Testing GMP..."
+gvm-cli \\
+  --gmp-username "$GMP_USER" \\
+  --gmp-password "$GMP_PASS" \\
+  socket --socketpath "$GMP_SOCKET" \\
+  --xml "<get_version/>" > version.xml 2>&1 || {
+  echo "❌ GMP failed:"
+  cat version.xml
+  exit 1
+}
+echo "✅ GMP OK"
+head -5 version.xml
+rm version.xml
+          '''
+        }
+      }
+    }
+
+    stage('Fetch Alive Hosts') {
+      steps {
+        copyArtifacts(
+          projectName: "${params.NMAP_JOB}",
+          selector: lastSuccessful(),
+          filter: "${params.ALIVE_FILE}",
+          flatten: true
+        )
+        sh '''
+set -e
+echo "[+] Hosts: $(wc -l < ${ALIVE_FILE})"
+head -3 ${ALIVE_FILE}
+        '''
+      }
+    }
+
+    stage('Prepare Target') {
+      steps {
+        withCredentials([usernamePassword(
+          credentialsId: 'gvm_admin',
+          usernameVariable: 'GMP_USER',
+          passwordVariable: 'GMP_PASS'
+        )]) {
+          sh '''
+set -e -u
+mkdir -p "${REPORT_DIR}"
+
+gmp() {
+  gvm-cli \\
+    --gmp-username "$GMP_USER" \\
+    --gmp-password "$GMP_PASS" \\
+    socket --socketpath "$GMP_SOCKET" \\
+    --xml "$1" 2>&1 || {
+    echo "❌ GMP failed: $1"
+    return 1
+  }
+}
+
+[ "$ENVIRONMENT" = "external" ] && PORT_LIST_ID="$PORTLIST_EXTERNAL" || PORT_LIST_ID="$PORTLIST_INTERNAL"
+
+HOST_COUNT=$(wc -l < "${ALIVE_FILE}")
+[ "$HOST_COUNT" -eq 0 ] && { echo "❌ No hosts"; exit 1; }
+
+HOSTS=$(sed \'s/[[:space:]]*$//\' "${ALIVE_FILE}" | tr \'\\n\' \',\' | sed \'s/,$//\')
+HOST_HASH=$(printf \'%s\' "$HOSTS" | sha1sum | cut -c1-8)
+TARGET_NAME="jenkins-${ENVIRONMENT}-${HOST_HASH}"
+
+echo "[+] Target: $TARGET_NAME ($HOST_COUNT hosts)"
+
+GET_TARGETS=$(printf \'<get_targets filter="name=%s"/>\' "$TARGET_NAME")
+EXISTING_TARGET=$(gmp "$GET_TARGETS" | xmllint --xpath \'string(//target/@id)\' - 2>/dev/null || true)
+
+if [ -n "$EXISTING_TARGET" ]; then
+  echo "[+] Reuse target: $EXISTING_TARGET"
+  TARGET_ID="$EXISTING_TARGET"
+else
+  echo "[+] Create target"
+  CREATE_XML=$(printf \'<create_target><name>%s</name><hosts>%s</hosts><port_list id="%s"/></create_target>\' "$TARGET_NAME" "$HOSTS" "$PORT_LIST_ID")
+  RESP=$(gmp "$CREATE_XML")
+  TARGET_ID=$(echo "$RESP" | xmllint --xpath \'string(//create_target_response/@id)\' - 2>/dev/null || true)
+  [ -z "$TARGET_ID" ] && { echo "❌ Target failed"; echo "$RESP"; exit 1; }
+  echo "[+] New target: $TARGET_ID"
+fi
+
+echo "TARGET_ID=$TARGET_ID" > "${REPORT_DIR}/target.env"
+          '''
+        }
+      }
+    }
+
+    stage('Resolve Scan Config') {
+      steps {
+        withCredentials([usernamePassword(
+          credentialsId: 'gvm_admin',
+          usernameVariable: 'GMP_USER',
+          passwordVariable: 'GMP_PASS'
+        )]) {
+          sh '''
+set -e -u
+gmp() {
+  gvm-cli \\
+    --gmp-username "$GMP_USER" \\
+    --gmp-password "$GMP_PASS" \\
+    socket --socketpath "$GMP_SOCKET" \\
+    --xml "$1"
+}
+
+echo "[+] Scan configs..."
+SCAN_CONFIG_ID=""
+for NAME in "Full and fast" "Full and Fast"; do
+  GET_CONFIGS=$(printf \'<get_configs filter="name=%s"/>\' "$NAME")
+  SCAN_CONFIG_ID=$(gmp "$GET_CONFIGS" | xmllint --xpath \'string(//config/@id)\' - 2>/dev/null || true)
+  [ -n "$SCAN_CONFIG_ID" ] && break
+done
+
+[ -z "$SCAN_CONFIG_ID" ] && {
+  SCAN_CONFIG_ID="daba56c8-73ec-11df-a475-002264764cea"
+  echo "⚠️ Default Full and fast: $SCAN_CONFIG_ID"
+}
+
+echo "SCAN_CONFIG_ID=$SCAN_CONFIG_ID" > "${REPORT_DIR}/scanconfig.env"
+echo "[+] Config: $SCAN_CONFIG_ID"
+          '''
+        }
+      }
+    }
+
+    stage('Create & Start Task') {
+      steps {
+        withCredentials([usernamePassword(
+          credentialsId: 'gvm_admin',
+          usernameVariable: 'GMP_USER',
+          passwordVariable: 'GMP_PASS'
+        )]) {
+          sh '''
+set -e -u
+. "${REPORT_DIR}/target.env"
+. "${REPORT_DIR}/scanconfig.env"
+
+gmp() {
+  gvm-cli \\
+    --gmp-username "$GMP_USER" \\
+    --gmp-password "$GMP_PASS" \\
+    socket --socketpath "$GMP_SOCKET" \\
+    --xml "$1"
+}
+
+echo "[+] Scanner: $SCANNER_ID"
+
+TASK_NAME="AWAN_Scan-${BUILD_ID}"
+TASK_XML=$(printf \'<create_task><name>%s</name><config id="%s"/><target id="%s"/><scanner id="%s"/></create_task>\' "$TASK_NAME" "$SCAN_CONFIG_ID" "$TARGET_ID" "$SCANNER_ID")
+echo "[DEBUG] Task XML: $TASK_XML"
+
+RESP=$(gmp "$TASK_XML")
+TASK_ID=$(echo "$RESP" | xmllint --xpath \'string(//create_task_response/@id)\' - 2>/dev/null || true)
+
+[ -z "$TASK_ID" ] && { echo "❌ Task failed"; echo "$RESP"; exit 1; }
+
+echo "$TASK_ID" > "${REPORT_DIR}/task.id"
+echo "[+] Task: $TASK_ID"
+
+gmp "$(printf \'<start_task task_id="%s"/>\' "$TASK_ID")"
+echo "✅ Task started: $TASK_ID"
+          '''
+        }
+      }
+    }
+
+    stage('Wait for Completion') {
+      steps {
+        withCredentials([usernamePassword(
+          credentialsId: 'gvm_admin',
+          usernameVariable: 'GMP_USER',
+          passwordVariable: 'GMP_PASS'
+        )]) {
+          sh '''
+set -e -u
+TASK_ID=$(cat "${REPORT_DIR}/task.id")
+
+gmp() {
+  gvm-cli \\
+    --gmp-username "$GMP_USER" \\
+    --gmp-password "$GMP_PASS" \\
+    socket --socketpath "$GMP_SOCKET" \\
+    --xml "$1"
+}
+
+echo "[+] Waiting (60s polls, 4h max)..."
+COUNT=0
+MAX_WAIT=14400
+
+while [ "$COUNT" -lt "$MAX_WAIT" ]; do
+  RESP=$(gmp "$(printf \'<get_tasks task_id="%s"/>\' "$TASK_ID")" 2>/dev/null || true)
+  STATUS=$(echo "$RESP" | xmllint --xpath \'string(//task/status)\' - 2>/dev/null || echo unknown)
+  PROGRESS=$(echo "$RESP" | xmllint --xpath \'string(//task/progress)\' - 2>/dev/null || echo 0)
+
+  echo "[+] $STATUS | $PROGRESS% | ${COUNT}s"
+
+  [ "$STATUS" = "Done" ] && { echo "✅ Done"; exit 0; }
+  [ "$STATUS" = "Error" ] || [ "$STATUS" = "Interrupted" ] && { echo "❌ Failed: $STATUS"; echo "$RESP"; exit 1; }
+
+  sleep 60
+  COUNT=$((COUNT + 60))
+done
+echo "❌ Timeout"
+exit 1
+          '''
+        }
+      }
+    }
+
+    stage('Export Report') {
+      steps {
+        withCredentials([usernamePassword(
+          credentialsId: 'gvm_admin',
+          usernameVariable: 'GMP_USER',
+          passwordVariable: 'GMP_PASS'
+        )]) {
+          sh '''
+set -e
+echo "=== EXPORT REPORT ==="
+
+TASK_ID=$(cat "${REPORT_DIR}/task.id")
+echo "TASK_ID: $TASK_ID"
+
+gmp() {
+  gvm-cli \\
+    --gmp-username "$GMP_USER" \\
+    --gmp-password "$GMP_PASS" \\
+    socket --socketpath "$GMP_SOCKET" \\
+    --xml "$1"
+}
+
+RESP=$(gmp "$(printf \'<get_tasks task_id="%s"/>\' "$TASK_ID")")
+echo "$RESP" > "${REPORT_DIR}/debug_task.xml"
+
+REPORT_ID=$(echo "$RESP" | xmllint --xpath \'string(//last_report/report/@id)\' - 2>/dev/null || \
+            echo "$RESP" | xmllint --xpath \'string(//reports/report[1]/@id)\' - 2>/dev/null || true)
+
+[ -z "$REPORT_ID" ] && { echo "❌ No report ID found"; exit 1; }
+echo "[+] Report ID: $REPORT_ID"
+
+gmp "$(printf \'<get_reports report_id="%s" details="1"/>\' "$REPORT_ID")" > "${REPORT_DIR}/report.xml"
+echo "✅ Report exported: ${REPORT_DIR}/report.xml"
+          '''
+        }
+      }
+    }
+
+    stage('Archive Artifacts') {
+      steps {
+        echo "Archiving artifacts..."
+        sh '''
+echo "=== FINAL WORKSPACE ==="
+find . -type f | head -20
+echo "=== REPORT FILES ==="
+ls -la openvas-reports/ || echo "No report dir"
+        '''
+        archiveArtifacts artifacts: 'alive-hosts.txt,openvas-reports/**', allowEmptyArchive: true
+        echo "✅ Artifacts archived successfully!"
+      }
+    }
+  }
+
+  post {
+    success {
+      echo "🎉 OpenVAS Scan COMPLETED SUCCESSFULLY"
+      echo "📥 Download report.xml from Artifacts section"
+    }
+    failure {
+      echo "❌ Scan FAILED - check console output"
+    }
+    always {
+      echo "Pipeline finished"
+    }
+  }
+}
