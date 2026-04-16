@@ -1,0 +1,200 @@
+pipeline {
+  agent any
+
+  parameters {
+    choice(name: 'ENVIRONMENT', choices: ['external', 'internal'], description: 'Scan type')
+    string(name: 'NMAP_JOB', defaultValue: 'Riskhunt-nmap')
+    string(name: 'ALIVE_FILE', defaultValue: 'alive-hosts.txt')
+    string(name: 'GMP_SOCKET', defaultValue: '/run/gvmd/gvmd.sock')
+  }
+
+  environment {
+    REPORT_DIR        = 'openvas-reports'
+    PORTLIST_EXTERNAL = '4a4717fe-57d2-11e1-9a26-406186ea4fc5'
+    PORTLIST_INTERNAL = '33d0cd82-57c6-11e1-8ed1-406186ea4fc5'
+    SCANNER_ID        = '08b69003-5fc2-4037-a479-93b440211c73'  // DEFAULT SCANNER
+    CSV_FORMAT_ID     = 'c1645568-627a-11e3-a660-406186ea4fc5'
+    MAX_SCAN_TIME     = '1800'
+  }
+
+  options {
+    skipDefaultCheckout true
+    timestamps()
+    timeout(time: 4, unit: 'HOURS')
+  }
+
+  stages {
+
+    stage('Validate Environment') {
+      steps {
+        sh '''
+set -ex
+echo "[INFO] Validating tools"
+command -v gvm-cli
+command -v xmllint
+[ -S "$GMP_SOCKET" ]
+'''
+      }
+    }
+
+    stage('Fetch Alive Hosts') {
+      steps {
+        copyArtifacts(
+          projectName: params.NMAP_JOB,
+          selector: lastSuccessful(),
+          filter: params.ALIVE_FILE,
+          flatten: true
+        )
+        sh '''
+set -ex
+echo "[INFO] Alive hosts:"
+wc -l alive-hosts.txt
+head -5 alive-hosts.txt
+'''
+      }
+    }
+
+    stage('Create Target') {
+      steps {
+        withCredentials([usernamePassword(
+          credentialsId: 'gvm_admin',
+          usernameVariable: 'GMP_USER',
+          passwordVariable: 'GMP_PASS'
+        )]) {
+          sh '''
+set -ex
+mkdir -p "$REPORT_DIR"
+
+PORTLIST="$PORTLIST_INTERNAL"
+[ "$ENVIRONMENT" = "external" ] && PORTLIST="$PORTLIST_EXTERNAL"
+
+HOSTS=$(tr '\\n' ',' < alive-hosts.txt | sed 's/,$//')
+NAME="jenkins-${ENVIRONMENT}-$(date +%s)"
+
+echo "[INFO] Creating target $NAME"
+
+XML="<create_target><name>$NAME</name><hosts>$HOSTS</hosts><port_list id=\\"$PORTLIST\\"/></create_target>"
+
+TARGET_ID=$(gvm-cli --gmp-username "$GMP_USER" --gmp-password "$GMP_PASS" \
+  socket --socketpath "$GMP_SOCKET" --xml "$XML" \
+  | xmllint --xpath 'string(//create_target_response/@id)' -)
+
+echo "$TARGET_ID" > "$REPORT_DIR/target.id"
+echo "[INFO] Target ID: $TARGET_ID"
+'''
+        }
+      }
+    }
+
+    stage('Create & Start Task') {
+      steps {
+        withCredentials([usernamePassword(
+          credentialsId: 'gvm_admin',
+          usernameVariable: 'GMP_USER',
+          passwordVariable: 'GMP_PASS'
+        )]) {
+          sh '''
+set -ex
+TARGET_ID=$(cat "$REPORT_DIR/target.id")
+
+XML="<create_task><name>AWAN-${BUILD_ID}</name><target id=\\"$TARGET_ID\\"/><scanner id=\\"$SCANNER_ID\\"/></create_task>"
+
+TASK_ID=$(gvm-cli --gmp-username "$GMP_USER" --gmp-password "$GMP_PASS" \
+  socket --socketpath "$GMP_SOCKET" --xml "$XML" \
+  | xmllint --xpath 'string(//create_task_response/@id)' -)
+
+echo "$TASK_ID" > "$REPORT_DIR/task.id"
+echo "[INFO] Task ID: $TASK_ID"
+
+gvm-cli --gmp-username "$GMP_USER" --gmp-password "$GMP_PASS" \
+  socket --socketpath "$GMP_SOCKET" \
+  --xml "<start_task task_id=\\"$TASK_ID\\"/>"
+'''
+        }
+      }
+    }
+
+    stage('Wait for Scan Completion') {
+      steps {
+        withCredentials([usernamePassword(
+          credentialsId: 'gvm_admin',
+          usernameVariable: 'GMP_USER',
+          passwordVariable: 'GMP_PASS'
+        )]) {
+          sh '''
+set -ex
+TASK_ID=$(cat "$REPORT_DIR/task.id")
+ELAPSED=0
+
+while [ "$ELAPSED" -lt "$MAX_SCAN_TIME" ]; do
+  STATUS=$(gvm-cli --gmp-username "$GMP_USER" --gmp-password "$GMP_PASS" \
+    socket --socketpath "$GMP_SOCKET" \
+    --xml "<get_tasks task_id=\\"$TASK_ID\\"/>" \
+    | xmllint --xpath 'string(//task/status)' - | tr A-Z a-z)
+
+  echo "[INFO] Status: $STATUS ($ELAPSED s)"
+
+  [ "$STATUS" = "done" ] && break
+  sleep 60
+  ELAPSED=$((ELAPSED + 60))
+done
+'''
+        }
+      }
+    }
+
+    stage('Export CSV Report') {
+      steps {
+        withCredentials([usernamePassword(
+          credentialsId: 'gvm_admin',
+          usernameVariable: 'GMP_USER',
+          passwordVariable: 'GMP_PASS'
+        )]) {
+          sh '''
+set -ex
+TASK_ID=$(cat "$REPORT_DIR/task.id")
+
+REPORT_ID=$(gvm-cli --gmp-username "$GMP_USER" --gmp-password "$GMP_PASS" \
+  socket --socketpath "$GMP_SOCKET" \
+  --xml "<get_tasks task_id=\\"$TASK_ID\\"/>" \
+  | xmllint --xpath 'string(//last_report/report/@id)' -)
+
+echo "[INFO] Report ID: $REPORT_ID"
+
+gvm-cli --gmp-username "$GMP_USER" --gmp-password "$GMP_PASS" \
+  socket --socketpath "$GMP_SOCKET" \
+  --xml "<get_reports report_id=\\"$REPORT_ID\\" format_id=\\"$CSV_FORMAT_ID\\" ignore_pagination=\\"1\\"/>" \
+  > "$REPORT_DIR/raw.xml"
+
+xmllint --xpath '//report_format_data/text()' "$REPORT_DIR/raw.xml" \
+| tr -d '\\n' \
+| base64 -d > "$REPORT_DIR/report.csv" || true
+
+if [ -s "$REPORT_DIR/report.csv" ]; then
+  echo "[INFO] Vulnerabilities found"
+  head -5 "$REPORT_DIR/report.csv"
+else
+  echo "[INFO] No vulnerabilities found (empty CSV)"
+  touch "$REPORT_DIR/report.csv"
+fi
+'''
+        }
+      }
+    }
+
+    stage('Archive CSV') {
+      steps {
+        archiveArtifacts artifacts: 'openvas-reports/report.csv'
+      }
+    }
+  }
+
+  post {
+    success {
+      echo "✅ OpenVAS scan completed successfully"
+    }
+    failure {
+      echo "❌ OpenVAS pipeline failed"
+    }
+  }
+}
